@@ -103,6 +103,23 @@ for an example. Lines starting with `#` are comments.
 - Env var set, file missing → fail-closed (all egress blocked except DNS).
 - Env var set, file present → only the listed hosts are reachable. IPv6 egress
   is blocked entirely (no IPv6 allowlist support).
+- Env var set, but the container lacks `NET_ADMIN` (e.g. `--cap-add` was
+  forgotten on `docker run`) → fail-closed: the container refuses to start
+  instead of silently running with unrestricted egress. This is intentional —
+  a missing capability must never look like a working allowlist.
+
+To verify the allowlist is actually enforced, run a shell command from inside
+the Hermes chat (prefix `!`) against a blocked host and an allowed one:
+
+```
+!echo "curl to ifconfig.io" && curl ifconfig.io
+!echo "curl to api.openai.com" && curl api.openai.com
+```
+
+A host that isn't in `allowd_host_names.txt` should fail to connect
+(`curl: (7) Failed to connect ... Could not connect to server`); an allowed
+host should get a normal HTTP response (even an API error like `http_unsupported`
+still proves the connection itself succeeded).
 
 ### Persistent gateway mode (single container)
 
@@ -135,8 +152,11 @@ docker run -it --rm  --pull=always `
 
 This requires `--cap-add=NET_ADMIN --cap-add=NET_RAW` on `docker run` since
 the container manages its own `iptables` rules — the kernel requires those
-capabilities for that, there's no way around it. Without them the container
-still starts, but egress is left unrestricted and a warning is logged.
+capabilities for that, there's no way around it. Without them, **the
+container refuses to start** (fatal error at boot) rather than silently
+running with unrestricted egress — forgetting the flags must be obvious, not
+a silent security downgrade. If you don't need the allowlist, unset
+`MY_HOST_NAMES_FILE_PATH` instead of dropping the capabilities.
 
 The agent process itself (UID 10000) never actually uses these capabilities —
 verified via `/proc/<pid>/status`, its `CapEff` is always zero. But the
@@ -192,25 +212,40 @@ docker compose run --rm hermes
 
 ### PowerShell shortcut: Start-Agent
 
-Add a `Start-Agent` function to your `$PROFILE` to always rebuild with
-`--pull` (see "How to build") before starting an interactive session, from
-any directory:
+Two helpers you can add to your `$PROFILE`. `Start-Agent` runs the
+**published** `ghcr.io/dhcgn/hermes-agent:latest` image with the same
+bind-mounts and egress allowlist as the compose path, but as a single
+`docker run` — it grants `NET_ADMIN`/`NET_RAW` to the container for the
+session (see "Persistent gateway mode (single container)"). `Start-Agent-From-Source`
+rebuilds from the local Dockerfile first, then runs through compose — the
+zero-capability hardened path.
+
+Plain `docker run` does **not** load `.env` (that's a Compose-only feature),
+and `${DATA_PATH}` placeholders in `--mount` strings aren't substituted either.
+So `Start-Agent` resolves the host paths inside the function with local
+PowerShell variables and passes them as literal `--mount` sources — no env
+pollution leaking into the calling shell.
 
 ```powershell
 if (!(Test-Path $PROFILE)) { New-Item -ItemType File -Path $PROFILE -Force }
 notepad $PROFILE
 ```
 
-Add this function, then save:
+Add these functions, then save:
 
 ```powershell
 function Start-Agent {
-    Push-Location "C:\dev\my-hermes-agent-docker"
-    try {
-        docker run --rm -it ghcr.io/dhcgn/hermes-agent:latest hermes
-    } finally {
-        Pop-Location
-    }
+    $dataPath   = Join-Path $env:USERPROFILE '.hermes-docker'
+    $dataRoPath = Join-Path $env:USERPROFILE '.hermes-docker-readonly'
+    $devPath    = 'C:\dev'
+
+    docker run --rm --pull=always -it `
+        --cap-add=NET_ADMIN --cap-add=NET_RAW `
+        --mount "type=bind,source=$dataPath,target=/opt/data" `
+        --mount "type=bind,source=$devPath,target=/opt/dev,readonly" `
+        --mount "type=bind,source=$dataRoPath,target=/opt/data-readonly,readonly" `
+        -e MY_HOST_NAMES_FILE_PATH=/opt/data-readonly/allowd_host_names.txt `
+        ghcr.io/dhcgn/hermes-agent:latest
 }
 ```
 

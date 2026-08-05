@@ -13,8 +13,13 @@ if [ "${MY_EGRESS_FIREWALL_EXTERNAL:-0}" = "1" ]; then
 fi
 
 if ! iptables -L >/dev/null 2>&1; then
-    echo "[egress-firewall] WARNING: no NET_ADMIN capability; egress left unrestricted." >&2
-    exit 0
+    # Fail closed: MY_HOST_NAMES_FILE_PATH was set, so the caller expects
+    # egress to be restricted. Silently continuing unrestricted here would
+    # look like a working allowlist while actually being wide open — refuse
+    # to start instead so a forgotten --cap-add is obvious immediately.
+    echo "[egress-firewall] FATAL: MY_HOST_NAMES_FILE_PATH is set but no NET_ADMIN capability is available (egress cannot be restricted)." >&2
+    echo "[egress-firewall] Add --cap-add=NET_ADMIN --cap-add=NET_RAW to 'docker run', or use the hardened compose deployment, or unset MY_HOST_NAMES_FILE_PATH to run without an allowlist." >&2
+    exit 1
 fi
 
 # No IPv6 allowlist support, so IPv6 egress is closed outright instead.
