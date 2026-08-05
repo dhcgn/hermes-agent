@@ -47,7 +47,11 @@ jobs:
           fi
 
       - name: Build & push
-        if: steps.current.outputs.label != steps.upstream.outputs.digest || steps.current.outputs.label == ''
+        # On push (our own Dockerfile/script changed), always rebuild — the
+        # upstream-digest comparison only makes sense for the schedule
+        # trigger, where nothing in this repo changed and we're just polling
+        # for a new upstream base image.
+        if: github.event_name != 'schedule' || steps.current.outputs.label != steps.upstream.outputs.digest || steps.current.outputs.label == ''
         run: |
           UPSTREAM="${{ steps.upstream.outputs.digest }}"
           # A Docker tag can't contain ':' (it's the name:tag separator), so
@@ -63,5 +67,5 @@ jobs:
           docker push --all-tags ghcr.io/dhcgn/hermes-agent
 
       - name: Skip (already up to date)
-        if: steps.current.outputs.label == steps.upstream.outputs.digest && steps.current.outputs.label != ''
+        if: github.event_name == 'schedule' && steps.current.outputs.label == steps.upstream.outputs.digest && steps.current.outputs.label != ''
         run: echo "Skipping rebuild — published image already built from this upstream digest."
