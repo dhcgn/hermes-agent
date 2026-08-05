@@ -96,7 +96,7 @@ web dashboard) and the egress allowlist — skip them if you only want to chat.
 ### Egress allowlist
 
 `MY_HOST_NAMES_FILE_PATH` points at a file with one hostname (or IPv4
-literal/CIDR) per line — see [allowd_host_names.txt](allowd_host_names.txt)
+literal/CIDR) per line — see [allowed_host_names.txt](allowed_host_names.txt)
 for an example. Lines starting with `#` are comments.
 
 - Env var unset → no enforcement (unrestricted egress, same as the original image).
@@ -116,7 +116,7 @@ the Hermes chat (prefix `!`) against a blocked host and an allowed one:
 !echo "curl to api.openai.com" && curl api.openai.com
 ```
 
-A host that isn't in `allowd_host_names.txt` should fail to connect
+A host that isn't in `allowed_host_names.txt` should fail to connect
 (`curl: (7) Failed to connect ... Could not connect to server`); an allowed
 host should get a normal HTTP response (even an API error like `http_unsupported`
 still proves the connection itself succeeded).
@@ -131,7 +131,7 @@ $dataPath = Join-Path $env:USERPROFILE ".hermes-docker"
 $dataReadOnlyPath = Join-Path $env:USERPROFILE ".hermes-docker-readonly"
 $devPath = "C:\dev"
 
-# $allowd_host_names_file_path = Join-Path $dataReadOnlyPath "allowd_host_names.txt"
+# $allowed_host_names_file_path = Join-Path $dataReadOnlyPath "allowed_host_names.txt"
 
 docker run -it --rm  --pull=always `
     --cap-add=NET_ADMIN `
@@ -146,7 +146,7 @@ docker run -it --rm  --pull=always `
     -e HERMES_DASHBOARD_BASIC_AUTH_PASSWORD=choose-a-strong-password `
     -e HERMES_DASHBOARD_BASIC_AUTH_SECRET=... `
     -e HERMES_DASHBOARD_HOST=127.0.0.1 `
-    -e MY_HOST_NAMES_FILE_PATH=/opt/data-readonly/allowd_host_names.txt `
+    -e MY_HOST_NAMES_FILE_PATH=/opt/data-readonly/allowed_host_names.txt `
     ghcr.io/dhcgn/hermes-agent:latest
 ```
 
@@ -259,7 +259,7 @@ function Start-Agent {
     docker run --rm --pull=always -it `
         --cap-add=NET_ADMIN --cap-add=NET_RAW `
         @mountArgs `
-        -e MY_HOST_NAMES_FILE_PATH=/opt/data-readonly/allowd_host_names.txt `
+        -e MY_HOST_NAMES_FILE_PATH=/opt/data-readonly/allowed_host_names.txt `
         ghcr.io/dhcgn/hermes-agent:latest
 }
 ```

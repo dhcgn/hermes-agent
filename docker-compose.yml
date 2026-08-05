@@ -24,7 +24,7 @@ services:
     cap_add: [NET_ADMIN, NET_RAW]
     entrypoint: ["sh", "/etc/cont-init.d/03-egress-firewall"]
     environment:
-      MY_HOST_NAMES_FILE_PATH: /opt/data-readonly/allowd_host_names.txt
+      MY_HOST_NAMES_FILE_PATH: /opt/data-readonly/allowed_host_names.txt
     volumes:
       - ${DATA_RO_PATH}:/opt/data-readonly:ro
     depends_on:
@@ -50,7 +50,7 @@ services:
       HERMES_DASHBOARD_BASIC_AUTH_PASSWORD: choose-a-strong-password
       HERMES_DASHBOARD_BASIC_AUTH_SECRET: change-me
       HERMES_DASHBOARD_HOST: 127.0.0.1
-      MY_HOST_NAMES_FILE_PATH: /opt/data-readonly/allowd_host_names.txt
+      MY_HOST_NAMES_FILE_PATH: /opt/data-readonly/allowed_host_names.txt
       # Rules were already applied by firewall-init; skip the redundant,
       # capability-less attempt so no misleading warning is logged.
       MY_EGRESS_FIREWALL_EXTERNAL: "1"
