@@ -50,10 +50,15 @@ jobs:
         if: steps.current.outputs.label != steps.upstream.outputs.digest || steps.current.outputs.label == ''
         run: |
           UPSTREAM="${{ steps.upstream.outputs.digest }}"
+          # A Docker tag can't contain ':' (it's the name:tag separator), so
+          # strip the 'sha256:' algo prefix from the digest before using it
+          # as a tag. The label keeps the full 'sha256:...' digest for parity
+          # with the comparison in the next run's 'current' step.
+          DIGEST_TAG="${UPSTREAM#sha256:}"
           docker build --pull \
             --label "io.dhcgn.hermes.upstream-digest=${UPSTREAM}" \
             -t ghcr.io/dhcgn/hermes-agent:latest \
-            -t "ghcr.io/dhcgn/hermes-agent:upstream-${UPSTREAM}" \
+            -t "ghcr.io/dhcgn/hermes-agent:upstream-${DIGEST_TAG}" \
             .
           docker push --all-tags ghcr.io/dhcgn/hermes-agent
 
