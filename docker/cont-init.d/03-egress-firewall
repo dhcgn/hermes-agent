@@ -36,8 +36,10 @@ if no_net_admin; then
     # egress to be restricted. Silently continuing unrestricted here would
     # look like a working allowlist while actually being wide open — refuse
     # to start instead so a forgotten --cap-add is obvious immediately.
+    echo "--------------------------------------------------------------------------" >&2
     echo "[egress-firewall] FATAL: MY_HOST_NAMES_FILE_PATH is set but no NET_ADMIN capability is available (egress cannot be restricted)." >&2
     echo "[egress-firewall] Add --cap-add=NET_ADMIN --cap-add=NET_RAW to 'docker run', or use the hardened compose deployment, or unset MY_HOST_NAMES_FILE_PATH to run without an allowlist." >&2
+    echo "--------------------------------------------------------------------------" >&2
     exit 1
 fi
 
