@@ -1,0 +1,57 @@
+#!/command/with-contenv sh
+# Egress allowlist: only hosts listed in $MY_HOST_NAMES_FILE_PATH are reachable.
+set -eu
+
+ALLOWLIST="${MY_HOST_NAMES_FILE_PATH:-}"
+[ -z "$ALLOWLIST" ] && exit 0
+
+# Hardened compose deployment: a separate helper container already applied
+# the rules to this shared network namespace; nothing to do here.
+if [ "${MY_EGRESS_FIREWALL_EXTERNAL:-0}" = "1" ]; then
+    echo "[egress-firewall] enforced externally (MY_EGRESS_FIREWALL_EXTERNAL=1); skipping."
+    exit 0
+fi
+
+if ! iptables -L >/dev/null 2>&1; then
+    echo "[egress-firewall] WARNING: no NET_ADMIN capability; egress left unrestricted." >&2
+    exit 0
+fi
+
+# No IPv6 allowlist support, so IPv6 egress is closed outright instead.
+command -v ip6tables >/dev/null 2>&1 && ip6tables -P OUTPUT DROP 2>/dev/null || true
+
+iptables -F EGRESS_GUARD 2>/dev/null || iptables -N EGRESS_GUARD
+iptables -D OUTPUT -j EGRESS_GUARD 2>/dev/null || true
+
+iptables -A EGRESS_GUARD -o lo -j ACCEPT
+iptables -A EGRESS_GUARD -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+iptables -A EGRESS_GUARD -p udp --dport 53 -j ACCEPT
+iptables -A EGRESS_GUARD -p tcp --dport 53 -j ACCEPT
+
+if [ -f "$ALLOWLIST" ]; then
+    while IFS= read -r line || [ -n "$line" ]; do
+        host=$(printf '%s' "$line" | tr -d '\r' | awk -F'#' '{print $1}' | awk '{print $1}')
+        [ -z "$host" ] && continue
+        case "$host" in
+            */*)
+                # CIDR notation — pass straight through.
+                iptables -A EGRESS_GUARD -d "$host" -j ACCEPT
+                ;;
+            *)
+                for ip in $(getent ahosts "$host" 2>/dev/null | awk '{print $1}' | sort -u); do
+                    case "$ip" in
+                        *:*) ;;  # AAAA result; IPv6 is blocked above
+                        *) iptables -A EGRESS_GUARD -d "$ip" -j ACCEPT ;;
+                    esac
+                done
+                ;;
+        esac
+    done < "$ALLOWLIST"
+else
+    echo "[egress-firewall] WARNING: $ALLOWLIST not found; blocking all egress except DNS." >&2
+fi
+
+iptables -A EGRESS_GUARD -j REJECT --reject-with icmp-admin-prohibited
+iptables -A OUTPUT -j EGRESS_GUARD
+
+echo "[egress-firewall] enforced using $ALLOWLIST"

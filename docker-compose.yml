@@ -1,0 +1,59 @@
+# Hardened deployment: the Hermes agent container never holds NET_ADMIN or
+# NET_RAW. A tiny "pause" container owns the shared network namespace; a
+# one-shot init container attaches to it, applies the iptables allowlist
+# (needs the capabilities), then exits. Rules live in the namespace, not in
+# whichever process added them, so hermes attaches afterwards with none.
+# See README.md "Hardened deployment" for setup and trade-offs.
+#
+# Requires Docker Compose v2.20+ (for `service_completed_successfully`).
+
+services:
+  net:
+    image: registry.k8s.io/pause:3.9
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    ports:
+      - "8642:8642"
+      - "9119:9119"
+
+  firewall-init:
+    build: .
+    image: ghcr.io/dhcgn/hermes-agent:latest
+    network_mode: "service:net"
+    cap_drop: [ALL]
+    cap_add: [NET_ADMIN, NET_RAW]
+    entrypoint: ["sh", "/etc/cont-init.d/03-egress-firewall"]
+    environment:
+      MY_HOST_NAMES_FILE_PATH: /opt/data-readonly/allowd_host_names.txt
+    volumes:
+      - ${DATA_RO_PATH}:/opt/data-readonly:ro
+    depends_on:
+      net:
+        condition: service_started
+
+  hermes:
+    build: .
+    image: ghcr.io/dhcgn/hermes-agent:latest
+    network_mode: "service:net"
+    # No cap_add: NET_ADMIN/NET_RAW are simply never granted here. Cannot
+    # cap_drop: ALL either — s6-overlay needs SETUID/SETGID/CHOWN (Docker's
+    # default set) to drop from root to the hermes user and chown /opt/data.
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+    volumes:
+      - ${DATA_PATH}:/opt/data
+      - ${DEV_PATH}:/opt/dev:ro
+      - ${DATA_RO_PATH}:/opt/data-readonly:ro
+    environment:
+      HERMES_DASHBOARD: "1"
+      HERMES_DASHBOARD_BASIC_AUTH_USERNAME: admin
+      HERMES_DASHBOARD_BASIC_AUTH_PASSWORD: choose-a-strong-password
+      HERMES_DASHBOARD_BASIC_AUTH_SECRET: change-me
+      HERMES_DASHBOARD_HOST: 127.0.0.1
+      MY_HOST_NAMES_FILE_PATH: /opt/data-readonly/allowd_host_names.txt
+      # Rules were already applied by firewall-init; skip the redundant,
+      # capability-less attempt so no misleading warning is logged.
+      MY_EGRESS_FIREWALL_EXTERNAL: "1"
+    depends_on:
+      firewall-init:
+        condition: service_completed_successfully

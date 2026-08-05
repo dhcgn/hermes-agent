@@ -1,0 +1,13 @@
+```
+.env
+
+# Local container runtime artifacts (created by docker compose build, not source)
+*.tar
+*.oci
+
+# Editor / OS cruft
+.vscode/
+*.log
+Thumbs.db
+.DS_Store
+```

@@ -1,0 +1,13 @@
+# Allowlist for the egress firewall. One entry per line.
+# Entries can be: hostname, IPv4 literal, or IPv4 CIDR. IPv6 egress is
+# blocked entirely. Lines starting with '#' are comments; inline comments
+# after whitespace are stripped. CRLF line endings are tolerated.
+
+# --- Model providers --------------------------------------------------------
+api.openai.com
+api.anthropic.com
+openrouter.ai
+
+# --- Tooling / web ----------------------------------------------------------
+
+# --- apt infrastructure (for agent "remember install" commands) ------------

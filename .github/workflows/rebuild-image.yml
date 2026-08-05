@@ -1,0 +1,62 @@
+name: rebuild-image
+
+on:
+  schedule:
+    - cron: '17 */6 * * *'   # every 6 hours
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - 'Dockerfile'
+      - 'docker/cont-init.d/**'
+      - '.github/workflows/rebuild-image.yml'
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Pull upstream & capture digest
+        id: upstream
+        run: |
+          docker pull nousresearch/hermes-agent:latest
+          DIGEST=$(docker inspect --format='{{range .RepoDigests}}{{println .}}{{end}}' nousresearch/hermes-agent:latest \
+                   | awk -F@ '/nousresearch/{print $2; exit}')
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+          echo "Upstream digest: $DIGEST"
+
+      - name: Pull published image & read upstream-digest label
+        id: current
+        continue-on-error: true
+        run: |
+          if docker pull ghcr.io/dhcgn/hermes-agent:latest 2>/dev/null; then
+            LABEL=$(docker inspect --format='{{ index .Config.Labels "io.dhcgn.hermes.upstream-digest" }}' \
+                    ghcr.io/dhcgn/hermes-agent:latest 2>/dev/null || true)
+            echo "label=${LABEL:-}" >> "$GITHUB_OUTPUT"
+            echo "Published image upstream-digest label: ${LABEL:-<none>}"
+          else
+            echo "label=" >> "$GITHUB_OUTPUT"
+            echo "No previously published image."
+          fi
+
+      - name: Build & push
+        if: steps.current.outputs.label != steps.upstream.outputs.digest || steps.current.outputs.label == ''
+        run: |
+          UPSTREAM="${{ steps.upstream.outputs.digest }}"
+          docker build --pull \
+            --label "io.dhcgn.hermes.upstream-digest=${UPSTREAM}" \
+            -t ghcr.io/dhcgn/hermes-agent:latest \
+            -t "ghcr.io/dhcgn/hermes-agent:upstream-${UPSTREAM}" \
+            .
+          docker push --all-tags ghcr.io/dhcgn/hermes-agent
+
+      - name: Skip (already up to date)
+        if: steps.current.outputs.label == steps.upstream.outputs.digest && steps.current.outputs.label != ''
+        run: echo "Skipping rebuild — published image already built from this upstream digest."
