@@ -235,15 +235,30 @@ Add these functions, then save:
 
 ```powershell
 function Start-Agent {
+    param(
+        [switch]$AddCurrentFolder
+    )
+
     $dataPath   = Join-Path $env:USERPROFILE '.hermes-docker'
     $dataRoPath = Join-Path $env:USERPROFILE '.hermes-docker-readonly'
     $devPath    = 'C:\dev'
 
+    $mounts = @(
+        "type=bind,source=$dataPath,target=/opt/data"
+        "type=bind,source=$devPath,target=/opt/dev,readonly"
+        "type=bind,source=$dataRoPath,target=/opt/data-readonly,readonly"
+    )
+    if ($AddCurrentFolder) {
+        # Must NOT be nested under /opt/dev — that's itself a read-only bind
+        # mount, and Docker can't create a mountpoint dir inside it.
+        $mounts += "type=bind,source=$PWD,target=/opt/current-folder,readonly"
+    }
+
+    $mountArgs = $mounts | ForEach-Object { '--mount', $_ }
+
     docker run --rm --pull=always -it `
         --cap-add=NET_ADMIN --cap-add=NET_RAW `
-        --mount "type=bind,source=$dataPath,target=/opt/data" `
-        --mount "type=bind,source=$devPath,target=/opt/dev,readonly" `
-        --mount "type=bind,source=$dataRoPath,target=/opt/data-readonly,readonly" `
+        @mountArgs `
         -e MY_HOST_NAMES_FILE_PATH=/opt/data-readonly/allowd_host_names.txt `
         ghcr.io/dhcgn/hermes-agent:latest
 }

@@ -12,7 +12,26 @@ if [ "${MY_EGRESS_FIREWALL_EXTERNAL:-0}" = "1" ]; then
     exit 0
 fi
 
-if ! iptables -L >/dev/null 2>&1; then
+no_net_admin() {
+    # `iptables -L` alone is not a reliable capability probe: on some kernel/
+    # iptables-nft combinations it exits 0 (empty ruleset) even without
+    # CAP_NET_ADMIN, because the listing goes through a netlink dump that
+    # isn't capability-checked the same way rule mutation is. Check the real
+    # effective capability bit (CAP_NET_ADMIN = 12) via /proc/self/status,
+    # then confirm with an actual mutating command (add + remove a rule).
+    capeff=$(awk '/^CapEff:/ {print $2}' /proc/self/status)
+    [ -z "$capeff" ] && return 0
+    if [ $(( (0x$capeff >> 12) & 1 )) -eq 0 ]; then
+        return 0
+    fi
+    if ! iptables -A OUTPUT -d 127.0.0.2 -j DROP 2>/dev/null; then
+        return 0
+    fi
+    iptables -D OUTPUT -d 127.0.0.2 -j DROP 2>/dev/null || true
+    return 1
+}
+
+if no_net_admin; then
     # Fail closed: MY_HOST_NAMES_FILE_PATH was set, so the caller expects
     # egress to be restricted. Silently continuing unrestricted here would
     # look like a working allowlist while actually being wide open — refuse
