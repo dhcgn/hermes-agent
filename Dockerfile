@@ -6,11 +6,15 @@
 #     MY_HOST_NAMES_FILE_PATH env var (see README.md)
 #
 # Needs --cap-add=NET_ADMIN --cap-add=NET_RAW at `docker run` for the
-# allowlist to be enforced; without them the container still runs, just
-# with unrestricted egress (see docker/cont-init.d/03-egress-firewall).
+# allowlist to be enforced; without them the container refuses to start
+# (see docker/cont-init.d/03-egress-firewall).
 
 ARG HERMES_BASE_IMAGE=nousresearch/hermes-agent:latest
 FROM ${HERMES_BASE_IMAGE}
+
+# Base image default (0) continues booting even if a cont-init.d script
+# exits non-zero — that would silently defeat the fail-closed egress check.
+ENV S6_BEHAVIOUR_IF_STAGE2_FAILS=2
 
 ARG TARGETARCH
 ARG GH_VERSION=2.97.0
