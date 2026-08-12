@@ -34,7 +34,7 @@ RUN set -eu; \
         arm64) gh_arch=arm64 ;; \
         *) echo "Unsupported TARGETARCH=${TARGETARCH}" >&2; exit 1 ;; \
     esac; \
-    curl -fsSL --retry 3 -o /tmp/gh.deb \
+    curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 -o /tmp/gh.deb \
         "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_${gh_arch}.deb" && \
     apt-get -o Acquire::Retries=3 update && \
     apt-get -o Acquire::Retries=3 install -y --no-install-recommends /tmp/gh.deb && \
@@ -48,7 +48,7 @@ RUN set -eu; \
         arm64) pwsh_arch=arm64 ;; \
         *) echo "Unsupported TARGETARCH=${TARGETARCH}" >&2; exit 1 ;; \
     esac; \
-    curl -fsSL --retry 3 -o /tmp/pwsh.tar.gz \
+    curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 -o /tmp/pwsh.tar.gz \
         "https://github.com/PowerShell/PowerShell/releases/download/v${PWSH_VERSION}/powershell-${PWSH_VERSION}-linux-${pwsh_arch}.tar.gz" && \
     mkdir -p /opt/microsoft/powershell && \
     tar -xzf /tmp/pwsh.tar.gz -C /opt/microsoft/powershell && \
@@ -66,7 +66,7 @@ RUN set -eu; \
         arm64) age_arch=arm64 ;; \
         *) echo "Unsupported TARGETARCH=${TARGETARCH}" >&2; exit 1 ;; \
     esac; \
-    curl -fsSL --retry 3 -o /tmp/age.tar.gz \
+    curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 -o /tmp/age.tar.gz \
         "https://github.com/FiloSottile/age/releases/download/v${AGE_VERSION}/age-v${AGE_VERSION}-linux-${age_arch}.tar.gz" && \
     tar -xzf /tmp/age.tar.gz -C /tmp && \
     install -m 0755 /tmp/age/age /usr/local/bin/age && \
