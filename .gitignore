@@ -11,3 +11,4 @@ Thumbs.db
 .DS_Store
 
 allowed_host_names.txt
+my-hermes-agent-docker.work.code-workspace
