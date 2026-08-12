@@ -10,4 +10,4 @@
 Thumbs.db
 .DS_Store
 
-*.prod.txt
+allowed_host_names.txt
